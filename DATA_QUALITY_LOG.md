@@ -22,8 +22,8 @@ Create DATA_QUALITY_LOG.md
   - Giữ nguyên giá trị `NULL` cho các cột kiểu số và `house_direction`,`balcony_direction`.
 - **Lý do:** 
   - **Tại sao không xóa dòng:** Việc thiếu thông tin pháp lý không làm mất đi giá trị cốt lõi của tin đăng là Giá và Diện tích. Nếu xóa thẳng tay, ta sẽ mất đi một lượng lớn mẫu dữ liệu quan trọng để tính toán mặt bằng giá chung của thị trường.
-  - **Tại sao gom thành 'Unknown': ? ** Trong bất động sản, việc "giấu" thông tin pháp lý hay nội thất cũng là một tín hiệu (signal) đáng chú ý. Phân loại chúng vào nhóm 'Unknown' giúp trả lời được câu hỏi kinh doanh: *"Những căn nhà mập mờ pháp lý có giá rẻ hơn bao nhiêu % so với nhà có sổ đỏ?"*.
-  - **Tại sao không áp dụng cho cột số: ? ** Tuyệt đối không thay `NULL` bằng số `0` cho các cột như mặt tiền hay số tầng, vì sẽ làm sai lệch hoàn toàn các phép tính trung bình (Average) trên các visualization tools. Việc để nguyên `NULL` giúp hệ thống tự động bỏ qua chúng khi tính toán.
+  - **Tại sao gom thành 'Unknown':  ** Trong bất động sản, việc "giấu" thông tin pháp lý hay nội thất cũng là một tín hiệu (signal) đáng chú ý. Phân loại chúng vào nhóm 'Unknown' giúp trả lời được câu hỏi kinh doanh: *"Những căn nhà mập mờ pháp lý có giá rẻ hơn bao nhiêu % so với nhà có sổ đỏ?"*.
+  - **Tại sao không áp dụng cho cột số:  ** Tuyệt đối không thay `NULL` bằng số `0` cho các cột như mặt tiền hay số tầng, vì sẽ làm sai lệch hoàn toàn các phép tính trung bình (Average) trên các visualization tools. Việc để nguyên `NULL` giúp hệ thống tự động bỏ qua chúng khi tính toán.
 
 ### Vấn đề 3: Ngoại lai (Outliers) - Nhà siêu nhỏ
 - **Tình trạng:** Phát hiện các căn nhà có diện tích cực kỳ phi lý (<= 5m2).
