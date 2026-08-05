@@ -11,6 +11,9 @@ Create DATA_QUALITY_LOG.md
 ### Vấn đề 1: Lỗi định dạng địa chỉ gộp
 - **Tình trạng:** Cột địa chỉ gốc chứa chuỗi dài không đồng nhất.
 - **Giải pháp:** Dùng hàm mảng (SPLIT_PART, string_to_array) trong PostgreSQL để bóc tách thành `city` và `district`. Chuẩn hóa các tiền tố (bỏ "Thành phố", "Tỉnh").
+- **Lý do:** 
+  - ** Giá trị phân tích:** Trong ngành Bất động sản, "Vị trí" là biến số quyết định giá trị cốt lõi. Nếu để nguyên chuỗi text dài, ta không thể sử dụng lệnh `GROUP BY` để trả lời những câu hỏi kinh doanh cơ bản nhất như: "Giá nhà trung bình ở Cầu Giấy là bao nhiêu?".
+  - **Tiền đề cho mô hình Star Schema:** Việc tách nhỏ và làm sạch thành công `city` và `district` là nguyên liệu đầu vào bắt buộc để xây dựng bảng danh mục khu vực (`dim_location`), giúp tối ưu hóa không gian lưu trữ cho Data Warehouse ở Phase 2.
 
 ### Vấn đề 2: Dữ liệu trống (Missing Values) ở các cột phân loại và các cột số   
 - **Tình trạng:** Rất nhiều tin đăng bỏ trống thông tin quan trọng như Pháp lý (`legal_status`), Nội thất (`furniture_state`), Hướng nhà (`house_direction`) và các cột kích thước (`frontage_m`, '`floors`,....).
@@ -20,7 +23,7 @@ Create DATA_QUALITY_LOG.md
 - **Lý do:** 
   - **Tại sao không xóa dòng:** Việc thiếu thông tin pháp lý không làm mất đi giá trị cốt lõi của tin đăng là Giá và Diện tích. Nếu xóa thẳng tay, ta sẽ mất đi một lượng lớn mẫu dữ liệu quan trọng để tính toán mặt bằng giá chung của thị trường.
   - **Tại sao gom thành 'Unknown': ? ** Trong bất động sản, việc "giấu" thông tin pháp lý hay nội thất cũng là một tín hiệu (signal) đáng chú ý. Phân loại chúng vào nhóm 'Unknown' giúp trả lời được câu hỏi kinh doanh: *"Những căn nhà mập mờ pháp lý có giá rẻ hơn bao nhiêu % so với nhà có sổ đỏ?"*.
-  - **Tại sao không áp dụng cho cột số: ? ** Tuyệt đối không thay `NULL` bằng số `0` cho các cột như mặt tiền hay số tầng, vì sẽ làm sai lệch hoàn toàn các phép tính trung bình (Average) trên Power BI. Việc để nguyên `NULL` giúp hệ thống tự động bỏ qua chúng khi tính toán.
+  - **Tại sao không áp dụng cho cột số: ? ** Tuyệt đối không thay `NULL` bằng số `0` cho các cột như mặt tiền hay số tầng, vì sẽ làm sai lệch hoàn toàn các phép tính trung bình (Average) trên các visualization tools. Việc để nguyên `NULL` giúp hệ thống tự động bỏ qua chúng khi tính toán.
 
 ### Vấn đề 3: Ngoại lai (Outliers) - Nhà siêu nhỏ
 - **Tình trạng:** Phát hiện các căn nhà có diện tích cực kỳ phi lý (<= 5m2).
@@ -28,10 +31,8 @@ Create DATA_QUALITY_LOG.md
 - **Lý do:** 
   - **Thiếu bằng chứng tuyệt đối:** Diện tích 5m2 có thể là do người dùng gõ nhầm (typo 50m2 thành 5m2), cố tình điền bừa, hoặc thực sự là một ki-ốt siêu nhỏ. Khác với lỗi trùng lặp dữ liệu, trường hợp này chưa đủ "bằng chứng thép" để loại bỏ hoàn toàn.
   - **Bảo toàn dữ liệu (Data Integrity):** Việc "cắm cờ" giúp giữ nguyên bức tranh thực tế của thị trường (bao gồm cả những tin đăng nhiễu). 
-  - **Trao quyền cho lớp BI (Business Intelligence):** Khi đưa dữ liệu lên Power BI, cột `area_suspect` sẽ đóng vai trò là một bộ lọc (Slicer). Người xem báo cáo có thể chủ động click để giữ hoặc loại bỏ các điểm dị thường này khỏi biểu đồ (Scatter Plot) theo nhu cầu phân tích, thay vì bị Data Analyst tự ý xóa mất ngay từ tầng Database.
 
 ### Vấn đề 4: Tin đăng rác/Trùng lặp (Spam/Deduplication)
 - **Tình trạng:** Phát hiện 2.699 dòng tin đăng bị copy-paste, giống hệt nhau về cả 3 tiêu chí trọng điểm: Địa chỉ (`address`), Giá (`price_billion_vnd`), và Diện tích (`area_sqm`).
 - **Giải pháp:** Dùng CTE kết hợp với Window Function `ROW_NUMBER() OVER(PARTITION BY...)` để đánh số thứ tự trong từng nhóm trùng lặp, sau đó xóa (`DELETE`) các bản sao (`row_num > 1`) và chỉ giữ lại 1 bản ghi gốc.
 - **Lý do:** Trái ngược với Vấn đề 3, việc 3 trường thông tin cốt lõi trùng khớp hoàn toàn là bằng chứng chắc chắn của hành vi "spam tin đăng" từ môi giới. Xóa thẳng tay (Hard Delete) ở bước này là bắt buộc để đảm bảo tính chính xác của các chỉ số tổng hợp (đặc biệt là giá trung bình theo khu vực).
-- **Verify:** Đã viết một Python script độc lập để mô phỏng lại toàn bộ pipeline làm sạch (loại address rác ➔ parse city/district ➔ chuẩn hoá prefix ➔ flag area_suspect ➔ dedup). Kết quả xác nhận số lượng 2.699 dòng bị xóa khớp 100% với logic SQ
