@@ -1,38 +1,47 @@
-Create DATA_QUALITY_LOG.md
 # Data Quality & Cleaning Log
 
-## 1. Tổng quan (Overview)
-- **Bảng gốc (`raw_housing`):** [30229] dòng.
-- **Bảng Staging (`stage_housing`):** [27527] dòng sau khi làm sạch.
-- **Tỷ lệ giữ lại:** [91]%.
+## 1. Overview
+- **Raw Table (`raw_housing`):** 30,229 rows.
+- **Staging Table (`stage_housing`):** 27,527 rows after cleaning.
+- **Retention Rate:** 91%.
 
-## 2. Các vấn đề dữ liệu phát hiện & Hướng xử lý (Data Issues & Solutions)
+## 2. Identified Data Issues & Solutions
 
-### Vấn đề 1: Lỗi định dạng địa chỉ gộp
-- **Tình trạng:** Cột địa chỉ gốc chứa chuỗi dài không đồng nhất.
-- **Giải pháp:** Dùng hàm mảng (SPLIT_PART, string_to_array) trong PostgreSQL để bóc tách thành `city` và `district`. Chuẩn hóa các tiền tố (bỏ "Thành phố", "Tỉnh").
-- **Lý do:** 
-  - ** Giá trị phân tích:** Trong ngành Bất động sản, "Vị trí" là biến số quyết định giá trị cốt lõi. Nếu để nguyên chuỗi text dài, ta không thể sử dụng lệnh `GROUP BY` để trả lời những câu hỏi kinh doanh cơ bản nhất như: "Giá nhà trung bình ở Cầu Giấy là bao nhiêu?".
-  - **Tiền đề cho mô hình Star Schema:** Việc tách nhỏ và làm sạch thành công `city` và `district` là nguyên liệu đầu vào bắt buộc để xây dựng bảng danh mục khu vực (`dim_location`), giúp tối ưu hóa không gian lưu trữ cho Data Warehouse ở Phase 2.
+### Issue 1: Concatenated Address Structure & Unicode Encoding Inconsistencies
+- **Observation:** 
+  - *Surface Level:* The original `address` column is a long, unstandardized text string across listings.
+  - *System Level:* Hidden Vietnamese Unicode encoding conflicts. (e.g., "Hà Nội" typed with precomposed vs. decomposed characters look identical but possess different byte sequences, causing the database to treat them as two distinct locations).
+- **Solution:** 
+  - *Structuring:* Applied string manipulation functions (`SPLIT_PART`, `string_to_array`, `REPLACE`) in PostgreSQL to parse the raw string, accurately extract `city` and `district`, and clean up garbage prefixes (e.g., "Thành phố", "Tỉnh").
+  - *Synchronization:* Applied Unicode normalization (NFC standard) to unify all hidden variants of province/city names into a single unique identifier.
+- **Rationale:** 
+  - **Business Value:** "Location" is the backbone of real estate valuation. Without extracting the District level, we cannot use `GROUP BY` to answer core business questions like: *"How much does the average house price in Cau Giay differ from the market average?"*.
+  - **Data Architecture:** Resolving the Unicode issue is a prerequisite for accurately assigning Foreign Keys when building the `dim_location` table (Star Schema) in Phase 2. Skipping this step would result in missing data (NULLs) or database bloat due to phantom locations during future `JOIN` operations.
 
-### Vấn đề 2: Dữ liệu trống (Missing Values) ở các cột phân loại và các cột số   
-- **Tình trạng:** Rất nhiều tin đăng bỏ trống thông tin quan trọng như Pháp lý (`legal_status`), Nội thất (`furniture_state`), Hướng nhà (`house_direction`) và các cột kích thước (`frontage_m`, '`floors`,....).
-- **Giải pháp:** 
-  - Dùng `COALESCE` gán giá trị 'Unknown' cho cột `legal_status` và `furniture_state`.
-  - Giữ nguyên giá trị `NULL` cho các cột kiểu số và `house_direction`,`balcony_direction`.
-- **Lý do:** 
-  - **Tại sao không xóa dòng:** Việc thiếu thông tin pháp lý không làm mất đi giá trị cốt lõi của tin đăng là Giá và Diện tích. Nếu xóa thẳng tay, ta sẽ mất đi một lượng lớn mẫu dữ liệu quan trọng để tính toán mặt bằng giá chung của thị trường.
-  - **Tại sao gom thành 'Unknown':  ** Trong bất động sản, việc "giấu" thông tin pháp lý hay nội thất cũng là một tín hiệu (signal) đáng chú ý. Phân loại chúng vào nhóm 'Unknown' giúp trả lời được câu hỏi kinh doanh: *"Những căn nhà mập mờ pháp lý có giá rẻ hơn bao nhiêu % so với nhà có sổ đỏ?"*.
-  - **Tại sao không áp dụng cho cột số:  ** Tuyệt đối không thay `NULL` bằng số `0` cho các cột như mặt tiền hay số tầng, vì sẽ làm sai lệch hoàn toàn các phép tính trung bình (Average) trên các visualization tools. Việc để nguyên `NULL` giúp hệ thống tự động bỏ qua chúng khi tính toán.
+### Issue 2: Missing Values in Categorical and Numerical Columns
+- **Observation:** Numerous listings omitted critical information such as Legal Status (`legal_status`), Furniture (`furniture_state`), House Direction (`house_direction`), and dimensional metrics (`frontage_m`, `floors`, etc.).
+- **Solution:** 
+  - Used `COALESCE` to assign 'Unknown' to categorical columns (`legal_status` and `furniture_state`).
+  - Retained `NULL` values for numerical columns and specific categorical attributes (`house_direction`, `balcony_direction`).
+- **Rationale:** 
+  - **Why not delete rows:** Missing legal info does not invalidate the listing's core value (Price and Area). Hard deleting these would remove a massive sample size needed for calculating general market prices.
+  - **Why group as 'Unknown':** In real estate, withholding legal or furniture info is a notable signal. Categorizing them as 'Unknown' helps answer business questions like: *"How much cheaper are houses with ambiguous legal status compared to those with certificates?"*.
+  - **Why not apply to numerical columns:** Never replace `NULL` with `0` for metrics like frontage or floors, as it would severely skew average calculations in visualization tools. Leaving them as `NULL` allows the system to automatically exclude them during aggregations.
 
-### Vấn đề 3: Ngoại lai (Outliers) - Nhà siêu nhỏ
-- **Tình trạng:** Phát hiện các căn nhà có diện tích cực kỳ phi lý (<= 5m2).
-- **Giải pháp:** Dùng lệnh `CASE WHEN` để tạo thêm một cột cờ (flag) `area_suspect` (kiểu boolean true/false) thay vì dùng lệnh `DELETE` để xóa vật lý.
-- **Lý do:** 
-  - **Thiếu bằng chứng tuyệt đối:** Diện tích 5m2 có thể là do người dùng gõ nhầm (typo 50m2 thành 5m2), cố tình điền bừa, hoặc thực sự là một ki-ốt siêu nhỏ. Khác với lỗi trùng lặp dữ liệu, trường hợp này chưa đủ "bằng chứng thép" để loại bỏ hoàn toàn.
-  - **Bảo toàn dữ liệu (Data Integrity):** Việc "cắm cờ" giúp giữ nguyên bức tranh thực tế của thị trường (bao gồm cả những tin đăng nhiễu). 
+### Issue 3: Outliers - Micro-Houses
+- **Observation:** Detected houses with highly illogical areas (<= 5m2).
+- **Solution:** Used a `CASE WHEN` statement to create a boolean flag column (`area_suspect`) instead of using a `DELETE` command for physical removal.
+- **Rationale:** 
+  - **Lack of Absolute Proof:** A 5m2 area could be a typo (50m2 entered as 5m2), intentionally fake, or an actual micro-kiosk. Unlike duplicate data, there isn't a "smoking gun" to justify complete deletion.
+  - **Data Integrity:** "Flagging" preserves the realistic picture of the market (including noisy listings). 
 
-### Vấn đề 4: Tin đăng rác/Trùng lặp (Spam/Deduplication)
-- **Tình trạng:** Phát hiện 2.699 dòng tin đăng bị copy-paste, giống hệt nhau về cả 3 tiêu chí trọng điểm: Địa chỉ (`address`), Giá (`price_billion_vnd`), và Diện tích (`area_sqm`).
-- **Giải pháp:** Dùng CTE kết hợp với Window Function `ROW_NUMBER() OVER(PARTITION BY...)` để đánh số thứ tự trong từng nhóm trùng lặp, sau đó xóa (`DELETE`) các bản sao (`row_num > 1`) và chỉ giữ lại 1 bản ghi gốc.
-- **Lý do:** Trái ngược với Vấn đề 3, việc 3 trường thông tin cốt lõi trùng khớp hoàn toàn là bằng chứng chắc chắn của hành vi "spam tin đăng" từ môi giới. Xóa thẳng tay (Hard Delete) ở bước này là bắt buộc để đảm bảo tính chính xác của các chỉ số tổng hợp (đặc biệt là giá trung bình theo khu vực).
+### Issue 4: Spam / Deduplication
+- **Observation:** Identified 2,699 copy-pasted listings with identical core criteria: Address (`address`), Price (`price_billion_vnd`), and Area (`area_sqm`).
+- **Solution:** Utilized a CTE combined with the `ROW_NUMBER() OVER(PARTITION BY...)` Window Function to rank rows within identical groups, then executed a `DELETE` on duplicates (`row_num > 1`), retaining only 1 master record.
+- **Rationale:** Unlike Issue 3, an exact match across these 3 core fields is undeniable proof of broker "spamming". A Hard Delete here is mandatory to ensure the accuracy of aggregate metrics (especially average price per area).
+
+## 3. Lessons Learned
+Through processing and standardizing this real-world dataset, I derived three core analytical takeaways:
+- **Never fully trust Raw Data:** Manual review cannot detect all "inflated prices" or numerical typos. It is imperative to apply statistical distribution techniques (like Window Functions combined with Z-Scores) to establish automated gates for identifying Outliers.
+- **The Power of Baseline Techniques:** Instead of merely reporting dry averages, utilizing CTEs to establish a baseline (e.g., using the 'Unknown' group as a benchmark) automates the quantification of percentage differences, making the data more comparative and intuitive.
+- **Business Impact Outweighs Pure Code:** Complex SQL skills are foundational, but the true value of an analytical project lies in translating queried numbers (e.g., price differences based on house direction or furniture) into practical, actionable business strategies.
