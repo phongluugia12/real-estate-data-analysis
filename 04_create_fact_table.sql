@@ -1,4 +1,4 @@
--- 1. Đập bảng Fact cũ đi
+-- 1. xóa Fact cũ đi
 DROP TABLE IF EXISTS fact_housing CASCADE;
 
 -- 2. Khởi tạo bảng Fact mới (chỉ chứa ID, loại bỏ hoàn toàn các cột Text cồng kềnh)
