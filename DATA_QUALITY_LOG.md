@@ -25,7 +25,7 @@
   - Retained `NULL` values for numerical columns and specific categorical attributes (`house_direction`, `balcony_direction`).
 - **Rationale:** 
   - **Why not delete rows:** Missing legal info does not invalidate the listing's core value (Price and Area). Hard deleting these would remove a massive sample size needed for calculating general market prices.
-  - **Why group as 'Unknown':** In real estate, withholding legal or furniture info is a notable signal. Categorizing them as 'Unknown' helps answer business questions like: *"How much cheaper are houses with ambiguous legal status compared to those with certificates?"*.
+  - **Why group as 'Unknown': Unknown indicates that the source listing did not provide explicit information about the property's legal status or furniture condition. It was retained as a separate category to distinguish missing information from actual states such as Basic, Full, or Have certificate. This allows the analysis to quantify data completeness while preventing missing values from being misinterpreted as a real property characteristic."*.
   - **Why not apply to numerical columns:** Never replace `NULL` with `0` for metrics like frontage or floors, as it would severely skew average calculations in visualization tools. Leaving them as `NULL` allows the system to automatically exclude them during aggregations.
 
 ### Issue 3: Outliers - Micro-Houses
