@@ -1,6 +1,5 @@
--- Bài toán 3: Nhận diện Outlier giá bất động sản theo từng khu vực (Z-Score)
+-- Bài toán 1: Nhận diện Outlier giá bất động sản theo từng khu vực (Z-Score)
 WITH District_Stats AS (
-    -- Tầng 1: Tính Mean và Standard Deviation cho từng quận
     SELECT 
         f.property_id,
         l.district,
@@ -12,10 +11,8 @@ WITH District_Stats AS (
         ON f.location_id = l.location_id
     WHERE f.area_suspect = FALSE 
         AND f.price_per_sqm_million IS NOT NULL
-    -- Không dùng GROUP BY vì Window Function tự động giữ nguyên số dòng của bảng Fact
 ),
 Z_Score_Calculation AS (
-    -- Tầng 2: Áp dụng công thức Z-score
     SELECT 
         property_id,
         district,
@@ -25,124 +22,130 @@ Z_Score_Calculation AS (
         ROUND(((price_per_sqm_million - avg_price) / NULLIF(stddev_price, 0))::numeric, 2) AS z_score
     FROM District_Stats
 )
--- Tầng 3: Lọc ra các dòng siêu dị biệt (|Z| > 3)
 SELECT * 
 FROM Z_Score_Calculation
 WHERE ABS(z_score) > 3
 ORDER BY z_score DESC;
 
-with AVG_DIST_PRICE as(
-select 
-l.district,
-round(avg(f.price_per_sqm_million )::numeric,2) as avg_price_per_sqm
-from fact_housing f 
-join dim_location l 
-	on f.location_id = l.location_id 
-where l.district is not null 
-	and f.area_suspect = FALSE
-group by l.district
+-- Bài toán 2: Phân tích Tình trạng Nội thất ảnh hưởng tới giá
+WITH furniture_stat AS (
+    SELECT 
+        df.furniture_state,
+        COUNT(f.property_id) AS total_house,
+        ROUND(AVG(f.price_per_sqm_million)::numeric,2) AS average_price_per_sqm
+    FROM fact_housing f
+    INNER JOIN dim_furniture df 
+        ON f.furniture_id = df.furniture_id 
+    WHERE f.area_suspect = FALSE
+    GROUP BY df.furniture_state
 ),
-ranked_expensive as(
-select district,
-avg_price_per_sqm, 
-dense_rank()OVER(order by avg_price_per_sqm desc) as ranking_expensive
-from AVG_DIST_PRICE 
-),
-ranked_cheapest as(
-select district,
-avg_price_per_sqm,
-dense_rank()OVER(order by avg_price_per_sqm asc) as ranking_cheap
-from AVG_DIST_PRICE
+baseline_furniture AS (
+    SELECT average_price_per_sqm AS baseline_price
+    FROM furniture_stat
+    WHERE furniture_state = 'Basic'
 )
-select * 
-from ranked_cheapest
-where ranking_cheap <= 10;
+SELECT 
+    fs.furniture_state,
+    fs.total_house,
+    fs.average_price_per_sqm,
+    ROUND(((fs.average_price_per_sqm - b.baseline_price) / b.baseline_price * 100)::numeric, 2) AS diff_vs_baseline_pct
+FROM furniture_stat fs
+CROSS JOIN baseline_furniture b 
+ORDER BY fs.average_price_per_sqm DESC;
 
-select d.legal_status,
-count(f.property_id ) as total_property,
-round(avg(f.price_per_sqm_million)::numeric,2) as avg_price
-from dim_legal d
-inner join fact_housing f 
-	on d.legal_id = f.legal_id 
-where f.area_suspect = false 
-group by d.legal_status 
-order by avg_price desc;
-
-
-select d.direction_name,
-	count(d.direction_name) as total_direction_house, 
-	round(avg(f.price_per_sqm_million)::numeric,2) as average_price_per_sqm
-from fact_housing f
-inner join dim_direction d 
-	on f.direction_id = d.direction_id 
-where f.direction_id is not null and
-	f.area_suspect = false 
-group by d.direction_name
-order by average_price_per_sqm desc;
-
-with furniture_stat as(
-select df.furniture_state ,
-	count(f.property_id) as total_house,
-	round(avg(f.price_per_sqm_million)::numeric,2) as average_price_per_sqm
-from fact_housing f
-inner join dim_furniture df 
-	on f.furniture_id = df.furniture_id 
-where f.area_suspect = false
-group by df.furniture_state
+-- Bài toán 3: Phân tích Tình trạng Pháp lý ảnh hưởng tới giá
+WITH legal_stat AS (
+    SELECT 
+        dl.legal_status,
+        COUNT(f.property_id) AS total_house,
+        ROUND(AVG(f.price_per_sqm_million)::numeric,2) AS average_price_per_sqm
+    FROM fact_housing f
+    INNER JOIN dim_legal dl 
+        ON f.legal_id = dl.legal_id
+    WHERE f.area_suspect = FALSE
+    GROUP BY dl.legal_status 
 ),
-baseline as(
-select average_price_per_sqm as baseline_price
-from furniture_stat
-where furniture_state = 'Unknown'
+baseline_legal AS (
+    SELECT average_price_per_sqm AS baseline_price
+    FROM legal_stat
+    WHERE legal_status = 'Have certificate'
 )
-select fs.furniture_state,
-	fs.total_house,
-	fs.average_price_per_sqm,
-	ROUND(((fs.average_price_per_sqm - b.baseline_price) / b.baseline_price * 100)::numeric, 2) AS diff_vs_baseline_pct
-from furniture_stat fs
-cross join baseline b 
-order by fs.average_price_per_sqm desc;
+SELECT 
+    ls.legal_status,
+    ls.total_house,
+    ls.average_price_per_sqm,
+    ROUND(((ls.average_price_per_sqm - b.baseline_price) / b.baseline_price * 100)::numeric, 2) AS diff_vs_baseline_pct
+FROM legal_stat ls
+CROSS JOIN baseline_legal b 
+ORDER BY ls.average_price_per_sqm DESC;
 
-with legal_stat as(
-select dl.legal_status ,
-	count(f.property_id) as total_house,
-	round(avg(f.price_per_sqm_million)::numeric,2) as average_price_per_sqm
-from fact_housing f
-inner join dim_legal dl 
-	on f.legal_id  = dl.legal_id
-where f.area_suspect = false
-group by dl.legal_status 
-),
-baseline as(
-select average_price_per_sqm as baseline_price
-from legal_stat
-where legal_status = 'Have certificate'
+-- Bài toán 4: Phân tích Hướng nhà ảnh hưởng tới giá
+SELECT 
+    d.direction_name,
+    COUNT(d.direction_name) AS total_direction_house, 
+    ROUND(AVG(f.price_per_sqm_million)::numeric,2) AS average_price_per_sqm
+FROM fact_housing f
+INNER JOIN dim_direction d 
+    ON f.direction_id = d.direction_id 
+WHERE f.direction_id IS NOT NULL 
+    AND f.area_suspect = FALSE 
+GROUP BY d.direction_name
+ORDER BY average_price_per_sqm DESC;
+
+-- Bài toán 5.1: Phân tích cấu trúc Phòng ngủ - Phòng tắm
+SELECT 
+    fh.bedrooms, 
+    fh.bathrooms,
+    COUNT(fh.property_id) AS total_house,
+    ROUND(AVG(fh.area_sqm)::numeric,2) AS average_sqm,
+    ROUND(AVG(fh.price_billion_vnd)::numeric,2) AS average_price_billion
+FROM fact_housing fh
+WHERE fh.area_suspect = FALSE 
+    AND fh.bedrooms IS NOT NULL  
+    AND fh.bathrooms IS NOT NULL
+GROUP BY 
+    fh.bedrooms,
+    fh.bathrooms
+HAVING fh.bedrooms <= 5 
+    AND fh.bathrooms <= 5
+ORDER BY 
+    fh.bathrooms DESC,
+    fh.bedrooms DESC;
+
+-- Bài toán 5.2: Phân cụm Diện tích (Area Bucketing)
+WITH area_tier AS (
+    SELECT 
+        property_id,
+        price_billion_vnd,
+        CASE 
+            WHEN area_sqm < 30 THEN '< 30 m2'
+            WHEN area_sqm >= 30 AND area_sqm < 50 THEN '30 - 50 m2'
+            WHEN area_sqm >= 50 AND area_sqm < 80 THEN '50 - 80 m2'
+            WHEN area_sqm >= 80 AND area_sqm < 120 THEN '80 - 120 m2'
+            ELSE '> 120 m2'
+        END AS area_group,
+        CASE 
+            WHEN area_sqm < 30 THEN 1
+            WHEN area_sqm >= 30 AND area_sqm < 50 THEN 2
+            WHEN area_sqm >= 50 AND area_sqm < 80 THEN 3
+            WHEN area_sqm >= 80 AND area_sqm < 120 THEN 4
+            ELSE 5
+        END AS sort_order
+    FROM fact_housing
+    WHERE area_suspect = FALSE
 )
-select ls.legal_status ,
-	ls.total_house,
-	ls.average_price_per_sqm,
-	ROUND(((ls.average_price_per_sqm - b.baseline_price) / b.baseline_price * 100)::numeric, 2) AS diff_vs_baseline_pct
-from legal_stat ls
-cross join baseline b 
-order by ls.average_price_per_sqm desc;
+SELECT 
+    area_group,
+    COUNT(property_id) AS total_house,
+    ROUND(AVG(price_billion_vnd)::numeric, 2) AS avg_price_billion
+FROM area_tier
+GROUP BY 
+    area_group, 
+    sort_order
+ORDER BY 
+    sort_order ASC;
 
-
-select fh.bedrooms , fh.bathrooms ,
-	count(fh.property_id ) as total_house,
-	round(avg(fh.area_sqm)::numeric,2) as average_sqm,
-	round(avg(fh.price_billion_vnd )::numeric,2) as average_price_billion
-from fact_housing fh
-where fh.area_suspect = false 
-	and fh.bedrooms is not null  
-	and fh.bathrooms is not null
-group by fh.bedrooms,
-		fh.bathrooms
-having fh.bedrooms <= 5 
-	and fh.bathrooms <= 5
-order by 
-	fh.bathrooms desc,
-	fh.bedrooms desc;
-
+-- Bài toán 6: Báo cáo gộp Top 10 Khu vực Đắt nhất và Rẻ nhất
 WITH AVG_DIST_PRICE AS (
     SELECT 
         l.district,
@@ -175,9 +178,7 @@ SELECT
     ranking
 FROM ranked_expensive 
 WHERE ranking <= 10
-
 UNION ALL
-
 SELECT 
     'Top 10 Rẻ Nhất' AS category,
     district,
