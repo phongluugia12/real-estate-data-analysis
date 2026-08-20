@@ -12,7 +12,7 @@
   - *Surface Level:* The original `address` column is a long, unstandardized text string across listings.
   - *System Level:* Hidden Vietnamese Unicode encoding conflicts. (e.g., "Hà Nội" typed with precomposed vs. decomposed characters look identical but possess different byte sequences, causing the database to treat them as two distinct locations).
 - **Solution:** 
-  - *Structuring:* Applied string manipulation functions (`SPLIT_PART`, `string_to_array`, `REPLACE`) in PostgreSQL to parse the raw string, accurately extract `city` and `district`, and clean up garbage prefixes (e.g., "Thành phố", "Tỉnh").
+  - *Structuring:* Applied string manipulation functions (string_to_array, REGEXP_REPLACE, REPLACE) in PostgreSQL to parse the raw string, accurately extract `city` and `district`, and clean up garbage prefixes (e.g., "Thành phố", "Tỉnh").
   - *Synchronization:* Applied Unicode normalization (NFC standard) to unify all hidden variants of province/city names into a single unique identifier.
 - **Rationale:** 
   - **Business Value:** "Location" is the backbone of real estate valuation. Without extracting the District level, we cannot use `GROUP BY` to answer core business questions like: *"How much does the average house price in Cau Giay differ from the market average?"*.
@@ -43,5 +43,5 @@
 ## 3. Lessons Learned
 Through processing and standardizing this real-world dataset, I derived three core analytical takeaways:
 - **Never fully trust Raw Data:** Manual review cannot detect all "inflated prices" or numerical typos. It is imperative to apply statistical distribution techniques (like Window Functions combined with Z-Scores) to establish automated gates for identifying Outliers.
-- **The Power of Baseline Techniques:** Instead of merely reporting dry averages, utilizing CTEs to establish a baseline (e.g., using the 'Unknown' group as a benchmark) automates the quantification of percentage differences, making the data more comparative and intuitive.
+- **The Power of Baseline Techniques:** Instead of merely reporting dry averages, utilizing CTEs to establish a baseline (e.g., using specific groups like 'Basic' furniture or 'Have certificate' legal status as a benchmark) automates the quantification of percentage differences, making the data more comparative and intuitive.
 - **Business Impact Outweighs Pure Code:** Complex SQL skills are foundational, but the true value of an analytical project lies in translating queried numbers (e.g., price differences based on house direction or furniture) into practical, actionable business strategies.
