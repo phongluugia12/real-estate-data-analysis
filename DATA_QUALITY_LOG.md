@@ -12,7 +12,7 @@
   - *Surface Level:* The original `address` column is a long, unstandardized text string across listings.
   - *System Level:* Hidden Vietnamese Unicode encoding conflicts. (e.g., "Hà Nội" typed with precomposed vs. decomposed characters look identical but possess different byte sequences, causing the database to treat them as two distinct locations).
 - **Solution:** 
-  - *Structuring:* Applied string manipulation functions (string_to_array, REGEXP_REPLACE, REPLACE) in PostgreSQL to parse the raw string, accurately extract `city` and `district`, and clean up garbage prefixes (e.g., "Thành phố", "Tỉnh").
+  - *Structuring:* Applied string_to_array to split the address by comma and extract the last two segments as city/district, then normalized administrative prefixes ('Huyện', 'Quận', 'Thị xã', 'Thành phố').
   - *Synchronization:* Applied Unicode normalization (NFC standard) to unify all hidden variants of province/city names into a single unique identifier.
 - **Rationale:** 
   - **Business Value:** "Location" is the backbone of real estate valuation. Without extracting the District level, we cannot use `GROUP BY` to answer core business questions like: *"How much does the average house price in Cau Giay differ from the market average?"*.
