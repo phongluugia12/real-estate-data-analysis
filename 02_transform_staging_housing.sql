@@ -20,10 +20,10 @@ alter table stage_housing
 add column area_suspect boolean;
 
 UPDATE stage_housing
-SET area_suspect = CASE 
-                      WHEN area_sqm <= 5 THEN true
-                      ELSE false 
-                   END;
+SET area_suspect = (
+    area_sqm IS NULL
+    OR area_sqm <= 5
+);
 
 select area_suspect,count(*)
 from stage_housing
@@ -111,9 +111,18 @@ UPDATE stage_housing
 SET district = TRIM(REPLACE(REPLACE(district, 'Phường ', ''), 'quận ', ''))
 WHERE district ILIKE 'Phường %' OR district ILIKE 'quận %';
 
-UPDATE stage_housing SET city = 'Bình Dương' WHERE city ILIKE 'Bình Dương (gần cafe%';
-UPDATE stage_housing SET city = 'Quảng Ninh' WHERE city ILIKE 'Quảng Ninh (Ngã 3%';
-UPDATE stage_housing SET city = 'Unknown', district = 'Unknown' WHERE city = 'giá 6ty';
+UPDATE stage_housing
+SET city = 'Bình Dương'
+WHERE city ILIKE 'Bình Dương (gần cafe%';
+
+UPDATE stage_housing
+SET city = 'Quảng Ninh'
+WHERE city ILIKE 'Quảng Ninh (Ngã 3%';
+
+UPDATE stage_housing
+SET city = 'Hồ Chí Minh',
+    district = 'Gò Vấp'
+WHERE city = 'giá 6ty';
 
 UPDATE stage_housing 
 SET district = REPLACE(district, 'Quận. ', 'Quận ') 

@@ -54,7 +54,7 @@ WHERE city IS NOT NULL AND district IS NOT NULL;
 SELECT COUNT(*) AS missing_information 
 FROM dim_location 
 WHERE (city IN ('', 'Unknown', 'N/A') OR city IS NULL)
-  AND (district IN ('', 'Unknown', 'N/A') OR district IS NULL);
+  OR (district IN ('', 'Unknown', 'N/A') OR district IS NULL);
 
 -- 5. Xem thử thành quả
 SELECT * FROM dim_location
