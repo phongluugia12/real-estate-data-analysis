@@ -1,31 +1,41 @@
--- Bài toán 1: Nhận diện Outlier giá bất động sản theo từng khu vực (Z-Score)
-WITH District_Stats AS (
-    SELECT 
+-- Bài toán 1: Nhận diện outlier giá theo từng khu vực
+WITH location_stats AS (
+    SELECT
         f.property_id,
+        l.city,
         l.district,
         f.price_per_sqm_million,
-        AVG(f.price_per_sqm_million) OVER(PARTITION BY l.district) AS avg_price,
-        STDDEV(f.price_per_sqm_million) OVER(PARTITION BY l.district) AS stddev_price
+        AVG(f.price_per_sqm_million) OVER (
+            PARTITION BY f.location_id
+        ) AS avg_price,
+        STDDEV(f.price_per_sqm_million) OVER (
+            PARTITION BY f.location_id
+        ) AS stddev_price
     FROM fact_housing f
-    JOIN dim_location l 
+    JOIN dim_location l
         ON f.location_id = l.location_id
-    WHERE f.area_suspect = FALSE 
-        AND f.price_per_sqm_million IS NOT NULL
+    WHERE f.area_suspect = FALSE
+      AND f.price_per_sqm_million IS NOT NULL
 ),
-Z_Score_Calculation AS (
-    SELECT 
+z_score_calculation AS (
+    SELECT
         property_id,
+        city,
         district,
         price_per_sqm_million,
-        ROUND(avg_price::numeric, 2) AS district_avg,
-        ROUND(stddev_price::numeric, 2) AS district_stddev,
-        ROUND(((price_per_sqm_million - avg_price) / NULLIF(stddev_price, 0))::numeric, 2) AS z_score
-    FROM District_Stats
+        ROUND(avg_price::NUMERIC, 2) AS location_avg,
+        ROUND(stddev_price::NUMERIC, 2) AS location_stddev,
+        ROUND((
+            (price_per_sqm_million - avg_price)
+            / NULLIF(stddev_price, 0)
+        )::NUMERIC, 2) AS z_score
+    FROM location_stats
 )
-SELECT * 
-FROM Z_Score_Calculation
+SELECT *
+FROM z_score_calculation
 WHERE ABS(z_score) > 3
-ORDER BY z_score DESC;
+ORDER BY ABS(z_score) DESC
+limit 50;
 
 -- Bài toán 2: Phân tích Tình trạng Nội thất ảnh hưởng tới giá
 WITH furniture_stat AS (
@@ -79,110 +89,126 @@ FROM legal_stat ls
 CROSS JOIN baseline_legal b 
 ORDER BY ls.average_price_per_sqm DESC;
 
--- Bài toán 4: Phân tích Hướng nhà ảnh hưởng tới giá
-SELECT 
+-- Bài toán 4: Mối liên hệ giữa hướng nhà và giá niêm yết/m²
+SELECT
     d.direction_name,
-    COUNT(d.direction_name) AS total_direction_house, 
-    ROUND(AVG(f.price_per_sqm_million)::numeric,2) AS average_price_per_sqm
+    COUNT(*) AS sample_size,
+    ROUND(
+        AVG(f.price_per_sqm_million)::NUMERIC,
+        2
+    ) AS average_price_per_sqm
 FROM fact_housing f
-INNER JOIN dim_direction d 
-    ON f.direction_id = d.direction_id 
-WHERE f.direction_id IS NOT NULL 
-    AND f.area_suspect = FALSE 
+INNER JOIN dim_direction d
+    ON f.direction_id = d.direction_id
+WHERE f.area_suspect IS FALSE
 GROUP BY d.direction_name
 ORDER BY average_price_per_sqm DESC;
 
--- Bài toán 5.1: Phân tích cấu trúc Phòng ngủ - Phòng tắm
-SELECT 
-    fh.bedrooms, 
+-- Bài toán 5.1: Phân tích cấu trúc phòng ngủ - phòng tắm
+SELECT
+    fh.bedrooms,
     fh.bathrooms,
-    COUNT(fh.property_id) AS total_house,
-    ROUND(AVG(fh.area_sqm)::numeric,2) AS average_sqm,
-    ROUND(AVG(fh.price_billion_vnd)::numeric,2) AS average_price_billion
+    COUNT(*) AS sample_size,
+    ROUND(AVG(fh.area_sqm)::NUMERIC, 2) AS average_sqm,
+    ROUND(AVG(fh.price_billion_vnd)::NUMERIC, 2) AS average_price_billion
 FROM fact_housing fh
-WHERE fh.area_suspect = FALSE 
-    AND fh.bedrooms IS NOT NULL  
-    AND fh.bathrooms IS NOT NULL
-GROUP BY 
+WHERE fh.area_suspect IS FALSE
+  AND fh.bedrooms > 0
+  AND fh.bathrooms > 0
+GROUP BY
     fh.bedrooms,
     fh.bathrooms
-HAVING fh.bedrooms <= 5 
-    AND fh.bathrooms <= 5
-ORDER BY 
+HAVING COUNT(*) >= 30
+ORDER BY
     fh.bathrooms DESC,
     fh.bedrooms DESC;
 
--- Bài toán 5.2: Phân cụm Diện tích (Area Bucketing)
+-- Bài toán 5.2: Phân nhóm diện tích
 WITH area_tier AS (
-    SELECT 
-        property_id,
+    SELECT
         price_billion_vnd,
-        CASE 
-            WHEN area_sqm < 30 THEN '< 30 m2'
-            WHEN area_sqm >= 30 AND area_sqm < 50 THEN '30 - 50 m2'
-            WHEN area_sqm >= 50 AND area_sqm < 80 THEN '50 - 80 m2'
-            WHEN area_sqm >= 80 AND area_sqm < 120 THEN '80 - 120 m2'
-            ELSE '> 120 m2'
+        CASE
+            WHEN area_sqm < 30  THEN '< 30 m2'
+            WHEN area_sqm < 50  THEN '30 - <50 m2'
+            WHEN area_sqm < 80  THEN '50 - <80 m2'
+            WHEN area_sqm < 120 THEN '80 - <120 m2'
+            ELSE '>= 120 m2'
         END AS area_group,
-        CASE 
-            WHEN area_sqm < 30 THEN 1
-            WHEN area_sqm >= 30 AND area_sqm < 50 THEN 2
-            WHEN area_sqm >= 50 AND area_sqm < 80 THEN 3
-            WHEN area_sqm >= 80 AND area_sqm < 120 THEN 4
+        CASE
+            WHEN area_sqm < 30  THEN 1
+            WHEN area_sqm < 50  THEN 2
+            WHEN area_sqm < 80  THEN 3
+            WHEN area_sqm < 120 THEN 4
             ELSE 5
         END AS sort_order
     FROM fact_housing
-    WHERE area_suspect = FALSE
+    WHERE area_suspect IS FALSE
+      AND area_sqm IS NOT NULL
 )
-SELECT 
+SELECT
     area_group,
-    COUNT(property_id) AS total_house,
-    ROUND(AVG(price_billion_vnd)::numeric, 2) AS avg_price_billion
+    COUNT(*) AS sample_size,
+    ROUND(AVG(price_billion_vnd)::NUMERIC, 2) AS avg_price_billion
 FROM area_tier
-GROUP BY 
-    area_group, 
-    sort_order
-ORDER BY 
-    sort_order ASC;
+GROUP BY area_group, sort_order
+ORDER BY sort_order;
 
--- Bài toán 6: Báo cáo gộp Top 10 Khu vực Đắt nhất và Rẻ nhất
-WITH AVG_DIST_PRICE AS (
-    SELECT 
+-- Bài toán 6: Top 10 khu vực theo giá niêm yết trung bình/m²
+WITH location_stats AS (
+    SELECT
+        f.location_id,
+        l.city,
         l.district,
-        ROUND(AVG(f.price_per_sqm_million)::numeric, 2) AS avg_price_per_sqm
-    FROM fact_housing f 
-    JOIN dim_location l 
-        ON f.location_id = l.location_id 
-    WHERE l.district IS NOT NULL 
-        AND f.area_suspect = FALSE
-    GROUP BY l.district
+        COUNT(*) AS sample_size,
+        AVG(f.price_per_sqm_million) AS avg_price_per_sqm
+    FROM fact_housing f
+    INNER JOIN dim_location l
+        ON f.location_id = l.location_id
+    WHERE f.area_suspect IS FALSE
+      AND f.price_per_sqm_million IS NOT NULL
+    GROUP BY
+        f.location_id,
+        l.city,
+        l.district
+    HAVING COUNT(*) >= 30
 ),
-ranked_expensive AS (
-    SELECT 
-        district,
-        avg_price_per_sqm, 
-        DENSE_RANK() OVER(ORDER BY avg_price_per_sqm DESC) AS ranking
-    FROM AVG_DIST_PRICE 
-),
-ranked_cheapest AS (
-    SELECT 
-        district,
-        avg_price_per_sqm,
-        DENSE_RANK() OVER(ORDER BY avg_price_per_sqm ASC) AS ranking
-    FROM AVG_DIST_PRICE
+ranked AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            ORDER BY avg_price_per_sqm DESC,
+                     sample_size DESC,
+                     city,
+                     district
+        ) AS expensive_rank,
+        ROW_NUMBER() OVER (
+            ORDER BY avg_price_per_sqm ASC,
+                     sample_size DESC,
+                     city,
+                     district
+        ) AS cheap_rank
+    FROM location_stats
 )
-SELECT 
+SELECT
     'Top 10 Đắt Nhất' AS category,
+    city,
     district,
-    avg_price_per_sqm,
-    ranking
-FROM ranked_expensive 
-WHERE ranking <= 10
+    sample_size,
+    ROUND(avg_price_per_sqm::NUMERIC, 2) AS avg_price_per_sqm,
+    expensive_rank AS ranking
+FROM ranked
+WHERE expensive_rank <= 10
+
 UNION ALL
-SELECT 
-    'Top 10 Rẻ Nhất' AS category,
+
+SELECT
+    'Top 10 Rẻ Nhất',
+    city,
     district,
-    avg_price_per_sqm,
-    ranking
-FROM ranked_cheapest
-WHERE ranking <= 10;
+    sample_size,
+    ROUND(avg_price_per_sqm::NUMERIC, 2),
+    cheap_rank
+FROM ranked
+WHERE cheap_rank <= 10
+
+ORDER BY category, ranking;
