@@ -1,9 +1,13 @@
 # Data Quality & Cleaning Log
 
 ## 1. Overview
-- **Retention Rate:** 91.06% (27,527 / 30,229).
+
+- **Raw listings:** 30,229.
+- **Rows excluded by the address-parsing rule:** 3.
+- **Probable duplicate rows removed:** 2,699.
+- **Retention rate:** 91.06% (27,527 / 30,229).
+- **Area-suspect rows retained:** 3.
 - **Rows passing the area-quality filter:** 27,524.
-- **Area-suspect rows:** 3.
 
 ## 2. Identified Data Issues & Solutions
 
