@@ -132,7 +132,7 @@ These figures are rounded values from the report snapshot. Filtering changes the
 
 ## Power BI Dashboard
 
-<!-- Before publishing this README, add an overview PNG to the repository and insert its relative image link here. -->
+![Vietnam real estate dashboard overview](dashboard-overview.png)
 
 [Open or download the Power BI report](<dashboard 1 (1).pbix>).
 
