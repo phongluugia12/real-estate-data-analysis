@@ -25,17 +25,22 @@ z_score_calculation AS (
         price_per_sqm_million,
         ROUND(avg_price::NUMERIC, 2) AS location_avg,
         ROUND(stddev_price::NUMERIC, 2) AS location_stddev,
-        ROUND((
-            (price_per_sqm_million - avg_price)
-            / NULLIF(stddev_price, 0)
-        )::NUMERIC, 2) AS z_score
+        (price_per_sqm_million - avg_price)
+            / NULLIF(stddev_price, 0) AS z_score_raw
     FROM location_stats
 )
-SELECT *
+SELECT
+    property_id,
+    city,
+    district,
+    price_per_sqm_million,
+    location_avg,
+    location_stddev,
+    ROUND(z_score_raw::NUMERIC, 2) AS z_score
 FROM z_score_calculation
-WHERE ABS(z_score) > 3
-ORDER BY ABS(z_score) DESC
-limit 50;
+WHERE ABS(z_score_raw) > 3
+ORDER BY ABS(z_score_raw) DESC
+LIMIT 50;
 
 -- Bài toán 2: Phân tích Tình trạng Nội thất ảnh hưởng tới giá
 WITH furniture_stat AS (
