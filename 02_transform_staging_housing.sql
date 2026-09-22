@@ -146,5 +146,17 @@ update stage_housing
 set city = REGEXP_REPLACE(city, '\s+', ' ', 'g'),
 	district = REGEXP_REPLACE(district, '\s+', ' ', 'g');
 
+update stage_housing
+set district = 'Nam Từ Liêm'
+where city = 'Hà Nội'
+  and district = 'Đại Mỗ'
+  and address = 'Đường Quang Tiến, Phường Đại Mỗ, Quận Nam Từ Liêm';
+
+update stage_housing
+set district = 'Cam Ranh'
+where  city = 'Khánh Hòa'
+  and  district = 'Cam Nghĩa'
+  and  address = 'Tổ Dân Phố Nghĩa An, Đường Nghĩa Phú, Phường Cam Nghĩa, TP. Cam Ranh';
+
 select * from stage_housing
 limit 100;
