@@ -154,6 +154,7 @@ The location chart uses a minimum of 30 populated unit-price observations in the
 | [03_create_dim_table.sql](03_create_dim_table.sql) | Create and populate dimensions |
 | [04_create_fact_table.sql](04_create_fact_table.sql) | Create and populate the fact table |
 | [05_business_insights.sql](05_business_insights.sql) | Run the analytical queries |
+| [06_validation_checks.sql](06_validation_checks.sql) | Run read-only checks for row counts, missing values, foreign-key references, and selected location mappings |
 | [DATA_QUALITY_LOG.md](DATA_QUALITY_LOG.md) | Record data issues, decisions, and checks |
 
 ## How to Reproduce
@@ -167,11 +168,17 @@ The location chart uses a minimum of 30 populated unit-price observations in the
 
 ### Execution Steps
 
-1. Create a dedicated project database or schema and download the source CSV.
-2. Import the CSV into `raw_housing`. The repository does not include a raw-table creation or import script. Preserve the source column names expected by script `01`, and import numeric attributes as suitable numeric types. The scripts assume `Price` is in billion VND and `Area` is in m².
-3. Execute scripts `01` through `04` in order using the same database and schema. Review the intermediate outputs and compare row counts with the data-quality log.
-4. Run individual analyses from script `05` and interpret their results using the documented filters and limitations.
-5. If using Power BI, configure the report's source connection for your PostgreSQL instance and refresh the data. Check the default summary metrics against the SQL results before interpreting filtered views.
+1. Create a dedicated PostgreSQL database for this project and download the source CSV. Use the `public` schema for the project tables.
+
+2. Import the CSV into `public.raw_housing`. The repository does not include a raw-table creation or import script. Preserve the source column names expected by script `01`, and import numeric attributes as suitable numeric types. The scripts assume `Price` is in billion VND and `Area` is in m².
+
+3. Execute scripts `01` through `04` in order in the project database, with `public` as the active schema. Review the intermediate outputs and compare row counts with the data-quality log.
+
+4. Run `06_validation_checks.sql`. These read-only queries check row counts, missing values, unmatched foreign-key references, and selected location mappings. Compare the results with the documented checks; they do not establish that every field is correct.
+
+5. Run individual analyses from `05_business_insights.sql` and interpret their results using the documented filters and limitations.
+
+6. If using Power BI, configure the report's source connection for your PostgreSQL instance and refresh the data. Check the default summary metrics against the SQL results before interpreting filtered views.
 
 The required raw-table headers are `Address`, `Area`, `Frontage`, `Access Road`, `House direction`, `Balcony direction`, `Floors`, `Bedrooms`, `Bathrooms`, `Legal status`, `Furniture state`, and `Price`.
 
