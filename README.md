@@ -41,6 +41,7 @@ The address-parsing exclusions and area-suspect records are different groups. In
 - **Source account:** `nguyentiennhan`.
 - **Geographic scope:** Vietnamese property listings with city and district information derived from their addresses.
 - **Observation type:** A listing record, not a completed sale or a guaranteed unique physical property.
+- **Dataset license:** Listed on Kaggle as [CC0: Public Domain](https://creativecommons.org/publicdomain/zero/1.0/).
 
 The dataset was obtained from Kaggle; I did not scrape the original listings. Source attribution does not establish permission to redistribute the data. Check the dataset's license and reuse terms before redistributing it or making an embedded report publicly accessible.
 
