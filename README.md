@@ -135,6 +135,10 @@ These figures are rounded values from the report snapshot. Filtering changes the
 
 ![Vietnam real estate dashboard overview](dashboard-overview.png)
 
+### Dashboard demo
+
+![Filtering the dashboard by city and price range](dashboard-demo.gif)
+
 [Open or download the Power BI report](<dashboard 1 (1).pbix>).
 
 The report includes:
