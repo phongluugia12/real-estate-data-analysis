@@ -139,7 +139,7 @@ These figures are rounded values from the report snapshot. Filtering changes the
 
 ![Filtering the dashboard by city and price range](dashboard-demo.gif)
 
-[Open or download the Power BI report](<dashboard 1 (1).pbix>).
+[Open or download the Power BI report](vietnam-housing-market-analysis.pbix).
 
 The report includes:
 
@@ -161,6 +161,7 @@ The location chart uses a minimum of 30 populated unit-price observations in the
 | [05_business_insights.sql](05_business_insights.sql) | Run the analytical queries |
 | [06_validation_checks.sql](06_validation_checks.sql) | Run read-only checks for row counts, missing values, foreign-key references, and selected location mappings |
 | [DATA_QUALITY_LOG.md](DATA_QUALITY_LOG.md) | Record data issues, decisions, and checks |
+| [vietnam-housing-market-analysis.pbix](vietnam-housing-market-analysis.pbix) | Interactive Power BI report and data model |
 
 ## How to Reproduce
 
