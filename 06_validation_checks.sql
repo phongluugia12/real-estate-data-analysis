@@ -155,3 +155,52 @@ WHERE (
     )
 GROUP BY l.location_id, l.city, l.district
 ORDER BY l.city, l.district, l.location_id;
+
+-- 7. Kiểm tra phân loại địa chỉ Đường Trần Bình Trọng, Phường 5, Quận Bình Thạnh.
+WITH stage_check AS (
+    SELECT
+        'stage_housing' AS table_name,
+        COUNT(*) AS total_rows,
+        COUNT(*) FILTER (
+            WHERE city = 'Hồ Chí Minh' AND district = 'Bình Thạnh'
+        ) AS valid_rows,
+        MIN(city) AS city,
+        MIN(district) AS district
+    FROM public.stage_housing
+    WHERE address = 'Đường Trần Bình Trọng, Phường 5, Quận Bình Thạnh'
+),
+fact_check AS (
+    SELECT
+        'fact_housing' AS table_name,
+        COUNT(*) AS total_rows,
+        COUNT(*) FILTER (
+            WHERE l.city = 'Hồ Chí Minh' AND l.district = 'Bình Thạnh'
+        ) AS valid_rows,
+        MIN(l.city) AS city,
+        MIN(l.district) AS district
+    FROM public.fact_housing f
+    LEFT JOIN public.dim_location l
+        ON f.location_id = l.location_id
+    WHERE f.address = 'Đường Trần Bình Trọng, Phường 5, Quận Bình Thạnh'
+)
+SELECT
+    table_name,
+    total_rows,
+    city,
+    district,
+    CASE
+        WHEN total_rows = 1 AND valid_rows = 1 THEN 'PASS'
+        ELSE 'FAIL'
+    END AS check_status
+FROM stage_check
+UNION ALL
+SELECT
+    table_name,
+    total_rows,
+    city,
+    district,
+    CASE
+        WHEN total_rows = 1 AND valid_rows = 1 THEN 'PASS'
+        ELSE 'FAIL'
+    END AS check_status
+FROM fact_check;

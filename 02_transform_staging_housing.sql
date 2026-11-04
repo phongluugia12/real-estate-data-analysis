@@ -158,5 +158,10 @@ where  city = 'Khánh Hòa'
   and  district = 'Cam Nghĩa'
   and  address = 'Tổ Dân Phố Nghĩa An, Đường Nghĩa Phú, Phường Cam Nghĩa, TP. Cam Ranh';
 
+update stage_housing
+set city = 'Hồ Chí Minh',
+    district = 'Bình Thạnh'
+where address = 'Đường Trần Bình Trọng, Phường 5, Quận Bình Thạnh';
+
 select * from stage_housing
 limit 100;
